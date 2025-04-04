@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Painel Principal</title>
+    <link rel="stylesheet" href="/css/styles.css">
+
+    <!-- Link para o FullCalendar -->
+    <link href="https://cdn.jsdelivr.net/npm/fullcalendar@3.10.2/dist/fullcalendar.min.css" rel="stylesheet" />
+</head>
+<body>
+
+    <!-- Menu Lateral -->
+    <div class="sidebar">
+        <div class="logo"></div>
+        <p class="AbaAtual">Agendamentos</p>
+        <a href="/clientes/clientes">Clientes</a>
+        <a href="/servicos/servicos">Serviços</a>
+    </div>
+
+    <!-- Conteúdo Principal -->
+    <div class="main-content">
+        <!-- Navbar -->
+        <div class="navbar">
+            <div class="logo">Painel de Agendamentos</div>
+            <div class="menu">
+                <a href="#" id="abrirModalAgendamento">Adicionar Agendamento</a>
+            </div>
+        </div>
+
+        <!-- Calendário -->
+        <div id="calendar"></div>
+
+        <!-- Modal para Adicionar Agendamento -->
+        <div id="modalAdicionarAgendamento" class="modal">
+            <div class="modal-content">
+                <h4>Adicionar Agendamento</h4>
+                <form id="formAdicionarAgendamento">
+                    <label for="cliente_id">Cliente</label>
+                    <select id="cliente_id" name="cliente_id" required>
+                        <% clientes.forEach(cliente => { %>
+                            <option value="<%= cliente.id %>"><%= cliente.nome_completo %></option>
+                        <% }) %>
+                    </select>
+
+                    <label for="servico_id">Serviço</label>
+                    <select id="servico_id" name="servico_id" required>
+                        <% servicos.forEach(servico => { %>
+                            <option value="<%= servico.id %>"><%= servico.nome %></option>
+                        <% }) %>
+                    </select>
+
+                    <label for="data_hora">Data e Hora</label>
+                    <input type="datetime-local" id="data_hora" name="data_hora" required>
+
+                    <button type="submit" id="saveButton">Salvar</button>
+                    <button type="button" id="fecharModalAgendamento">Cancelar</button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Modal para Editar Agendamento -->
+        <div id="modalEditarAgendamento" class="modal">
+            <div class="modal-content">
+                <h4>Editar Agendamento</h4>
+                <form id="formEditarAgendamento">
+                    <label for="editar_cliente_id">Cliente</label>
+                    <select id="editar_cliente_id" name="cliente_id" required></select>
+
+                    <label for="editar_servico_id">Serviço</label>
+                    <select id="editar_servico_id" name="servico_id" required></select>
+
+                    <label for="editar_data_hora">Data e Hora</label>
+                    <input type="datetime-local" id="editar_data_hora" name="data_hora" required>
+
+                    <button type="submit" id="saveEditButton">Salvar Alterações</button>
+                    <button type="button" id="fecharModalEditar">Cancelar</button>
+                </form>
+                <button type="button" id="excluirAgendamentoButton">Excluir Agendamento</button>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        document.addEventListener("DOMContentLoaded", function () {
+            // Abrir o modal de "Adicionar Agendamento"
+            document.getElementById('abrirModalAgendamento').addEventListener('click', function() {
+                document.getElementById('modalAdicionarAgendamento').style.display = 'block';
+            });
+
+            // Fechar o modal de "Adicionar Agendamento"
+            document.getElementById('fecharModalAgendamento').addEventListener('click', function() {
+                document.getElementById('modalAdicionarAgendamento').style.display = 'none';
+            });
+
+            // Fechar o modal de "Editar Agendamento"
+            document.getElementById('fecharModalEditar').addEventListener('click', function() {
+                document.getElementById('modalEditarAgendamento').style.display = 'none';
+            });
+
+            // Enviar os dados do formulário de "Adicionar Agendamento" via AJAX
+            document.getElementById('formAdicionarAgendamento').addEventListener('submit', function(event) {
+                event.preventDefault();  // Impede o envio padrão do formulário
+
+                const cliente_id = document.getElementById('cliente_id').value;
+                const servico_id = document.getElementById('servico_id').value;
+                const data_hora = document.getElementById('data_hora').value;
+
+                const dados = {
+                    cliente_id: cliente_id,
+                    servico_id: servico_id,
+                    data_hora: data_hora
+                };
+
+                // Enviando os dados via AJAX para o servidor
+                fetch('/agendamentos/criar', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(dados)
+                })
+                .then(response => response.json())
+                .then(data => {
+                    console.log('Agendamento salvo com sucesso', data);
+                    // Fechar o modal após o sucesso
+                    document.getElementById('modalAdicionarAgendamento').style.display = 'none';
+                    // Atualizar o calendário com o novo agendamento
+                    $('#calendar').fullCalendar('renderEvent', {
+                        title: data.title,
+                        start: moment(data.data_hora).format("YYYY-MM-DDTHH:mm"),
+                        allDay: false
+                    });
+                })
+                .catch(error => {
+                    console.error('Erro ao salvar o agendamento:', error);
+                });
+            });
+
+            // Carregar os agendamentos ao iniciar a página
+            fetch('/agendamentos/todos')
+                .then(response => response.json())
+                .then(agendamentos => {
+                    const events = agendamentos.map(agendamento => ({
+                        id: agendamento.id,
+                        title: agendamento.title,
+                        start: moment(agendamento.start).format("YYYY-MM-DDTHH:mm"),
+                        allDay: false
+                    }));
+                    $('#calendar').fullCalendar('renderEvents', events, true);
+                })
+                .catch(error => {
+                    console.error('Erro ao carregar agendamentos:', error);
+                });
+
+            // Evento de clique em um agendamento para editar ou excluir
+            $('#calendar').fullCalendar({
+                eventClick: function(event, jsEvent, view) {
+                    document.getElementById('modalEditarAgendamento').style.display = 'block';
+
+                    // Preencher os campos do formulário de edição com os dados do evento
+                    document.getElementById('editar_cliente_id').value = event.cliente_id;
+                    document.getElementById('editar_servico_id').value = event.servico_id;
+                    document.getElementById('editar_data_hora').value = moment(event.start).format('YYYY-MM-DDTHH:mm');
+
+                    // Configurar o botão de excluir
+                    document.getElementById('excluirAgendamentoButton').onclick = function() {
+                        fetch(`/agendamentos/excluir/${event.id}`, { method: 'DELETE' })
+                            .then(response => response.json())
+                            .then(() => {
+                                console.log('Agendamento excluído');
+                                $('#calendar').fullCalendar('removeEvents', event.id);  // Remover o evento do calendário
+                                document.getElementById('modalEditarAgendamento').style.display = 'none';
+                            })
+                            .catch(error => console.error('Erro ao excluir agendamento:', error));
+                    };
+                },
+
+                // Definir a visualização inicial e permitir a troca entre os modos
+                header: {
+                    left: 'prev,next today',
+                    center: 'title',
+                    right: 'month,agendaWeek,agendaDay'
+                },
+                views: {
+                    month: { 
+                        titleFormat: 'MMMM YYYY', 
+                        columnHeaderFormat: 'ddd D' 
+                    },
+                    agendaWeek: { 
+                        titleFormat: 'Week of YYYY-MM-DD', 
+                        columnHeaderFormat: 'ddd D' 
+                    },
+                    agendaDay: { 
+                        titleFormat: 'YYYY-MM-DD', 
+                        columnHeaderFormat: 'ddd D' 
+                    }
+                }
+            });
+
+            // Atualizar um agendamento existente
+            document.getElementById('formEditarAgendamento').addEventListener('submit', function(event) {
+                event.preventDefault();
+
+                const cliente_id = document.getElementById('editar_cliente_id').value;
+                const servico_id = document.getElementById('editar_servico_id').value;
+                const data_hora = document.getElementById('editar_data_hora').value;
+
+                const dados = {
+                    cliente_id: cliente_id,
+                    servico_id: servico_id,
+                    data_hora: data_hora
+                };
+
+                const agendamentoId = document.getElementById('editar_agendamento_id').value;
+
+                fetch(`/agendamentos/editar/${agendamentoId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(dados)
+                })
+                .then(response => response.json())
+                .then(data => {
+                    console.log('Agendamento editado com sucesso', data);
+                    $('#calendar').fullCalendar('removeEvents', agendamentoId);  // Remover o evento antigo
+                    $('#calendar').fullCalendar('renderEvent', {
+                        id: agendamentoId,
+                        title: data.title,
+                        start: moment(data.data_hora).format("YYYY-MM-DDTHH:mm"),
+                        allDay: false
+                    });
+                    document.getElementById('modalEditarAgendamento').style.display = 'none';
+                })
+                .catch(error => console.error('Erro ao editar agendamento:', error));
+            });
+
+        });
+    </script>
+
+    <!-- Scripts para FullCalendar -->
+    <script src="https://cdn.jsdelivr.net/npm/jquery@3.6.0/dist/jquery.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/moment@2.29.1/moment.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/fullcalendar@3.10.2/dist/fullcalendar.min.js"></script>
+</body>
+</html>
